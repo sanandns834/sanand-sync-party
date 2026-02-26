@@ -1,12 +1,46 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// ==========================
+// 📁 Create uploads folder if not exists
+// ==========================
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
+// ==========================
+// 📁 Multer Setup
+// ==========================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage });
+
+// Serve static files
 app.use(express.static(__dirname));
+app.use("/uploads", express.static("uploads"));
+
+// ==========================
+// 🎵 Upload Route
+// ==========================
+app.post("/upload", upload.single("song"), (req, res) => {
+  const fileUrl = "/uploads/" + req.file.filename;
+  res.json({ url: fileUrl });
+});
 
 let rooms = {};
 
@@ -17,7 +51,9 @@ function generateRoomCode() {
 
 io.on("connection", (socket) => {
 
+  // ==========================
   // 🔥 CREATE ROOM
+  // ==========================
   socket.on("createRoom", () => {
     const code = generateRoomCode();
 
@@ -25,7 +61,8 @@ io.on("connection", (socket) => {
       host: socket.id,
       users: [],
       currentTime: 0,
-      isPlaying: false
+      isPlaying: false,
+      currentSong: null
     };
 
     socket.join(code);
@@ -35,7 +72,9 @@ io.on("connection", (socket) => {
     io.to(code).emit("updateUsers", rooms[code].users.length);
   });
 
+  // ==========================
   // 🔥 JOIN ROOM
+  // ==========================
   socket.on("joinRoom", (code) => {
     if (rooms[code]) {
       socket.join(code);
@@ -44,17 +83,39 @@ io.on("connection", (socket) => {
       socket.emit("roomJoined", code);
       io.to(code).emit("updateUsers", rooms[code].users.length);
 
-      // Send current sync state to new user
+      // Send current sync state
       socket.emit("syncState", {
         time: rooms[code].currentTime,
         isPlaying: rooms[code].isPlaying
       });
+
+      // Send current song if exists
+      if (rooms[code].currentSong) {
+        socket.emit("loadSong", rooms[code].currentSong);
+      }
     }
   });
 
-  // 🔥 HOST CONTROLS SYNC
+  // ==========================
+  // 🎵 NEW SONG UPLOAD
+  // ==========================
+  socket.on("newSong", ({ code, url }) => {
+    if (rooms[code] && rooms[code].host === socket.id) {
+
+      rooms[code].currentSong = url;
+      rooms[code].currentTime = 0;
+      rooms[code].isPlaying = true;
+
+      io.to(code).emit("loadSong", url);
+    }
+  });
+
+  // ==========================
+  // 🔄 REAL-TIME SYNC UPDATE
+  // ==========================
   socket.on("updateState", ({ code, time, isPlaying }) => {
     if (rooms[code] && rooms[code].host === socket.id) {
+
       rooms[code].currentTime = time;
       rooms[code].isPlaying = isPlaying;
 
@@ -65,7 +126,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 🔥 DJ SYNC PLAY BUTTON
+  // ==========================
+  // 🎧 DJ SYNC BUTTON
+  // ==========================
   socket.on("syncPlay", (code) => {
     if (rooms[code] && rooms[code].host === socket.id) {
       io.to(code).emit("syncState", {
@@ -75,13 +138,18 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 🔥 CHAT SYSTEM
+  // ==========================
+  // 💬 CHAT SYSTEM
+  // ==========================
   socket.on("chatMessage", ({ room, msg }) => {
     io.to(room).emit("chatMessage", msg);
   });
 
-  // 🔥 DISCONNECT HANDLING
+  // ==========================
+  // ❌ DISCONNECT
+  // ==========================
   socket.on("disconnect", () => {
+
     for (let code in rooms) {
       if (rooms[code]) {
 
@@ -89,7 +157,7 @@ io.on("connection", (socket) => {
           id => id !== socket.id
         );
 
-        // If host leaves → delete room
+        // If host leaves → close room
         if (rooms[code].host === socket.id) {
           io.to(code).emit("roomClosed");
           delete rooms[code];
@@ -102,11 +170,14 @@ io.on("connection", (socket) => {
         }
       }
     }
+
   });
 
 });
 
+// ==========================
 // ✅ Render Port Fix
+// ==========================
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
