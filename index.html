@@ -2,17 +2,16 @@
 <html>
 <head>
   <title>Sanand's Sync Party</title>
-
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
     body {
       margin: 0;
       background: black;
-      overflow: hidden;
-      font-family: 'Courier New', monospace;
       color: #00ffff;
+      font-family: Arial, sans-serif;
       text-align: center;
+      overflow: hidden;
     }
 
     canvas {
@@ -37,34 +36,30 @@
       background: transparent;
       border: 2px solid #00ffff;
       color: #00ffff;
-      padding: 12px 30px;
-      font-size: 16px;
-      border-radius: 30px;
+      padding: 10px 25px;
+      border-radius: 25px;
       cursor: pointer;
-      transition: 0.3s;
-      box-shadow: 0 0 10px #00ffff;
       margin: 10px;
+      box-shadow: 0 0 10px #00ffff;
+      transition: 0.3s;
     }
 
     button:hover {
       background: #00ffff;
       color: black;
-      box-shadow: 0 0 25px #00ffff;
     }
 
     input {
-      background: transparent;
+      padding: 10px;
+      border-radius: 20px;
       border: 2px solid #ff00ff;
-      padding: 12px 20px;
-      border-radius: 30px;
+      background: black;
       color: white;
-      outline: none;
-      box-shadow: 0 0 10px #ff00ff;
-      margin: 10px;
+      margin: 5px;
     }
 
     .vinyl {
-      margin: 30px auto;
+      margin: 20px auto;
       width: 150px;
       height: 150px;
       border-radius: 50%;
@@ -81,14 +76,15 @@
       to { transform: rotate(360deg); }
     }
 
-    #users {
-      margin-top: 15px;
-      font-size: 18px;
-      color: #ff00ff;
-    }
-
-    .upload-section {
-      margin-top: 20px;
+    #chatBox {
+      width: 300px;
+      height: 150px;
+      overflow-y: auto;
+      border: 1px solid #00ffff;
+      margin: 10px auto;
+      padding: 5px;
+      text-align: left;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -108,22 +104,26 @@
   <h3 id="status"></h3>
   <div id="users"></div>
 
-  <button onclick="syncPlay()">DJ Sync Play</button>
+  <button onclick="djSync()">DJ Sync Play</button>
 
   <div class="vinyl" id="vinyl"></div>
 
-  <div class="upload-section">
-    <input type="file" id="mp3Upload" accept="audio/mp3">
-    <button onclick="uploadSong()">Upload & Play</button>
-  </div>
+  <input type="file" id="mp3Upload" accept="audio/mp3">
+  <button onclick="uploadSong()">Upload & Play</button>
 
   <audio id="audio"></audio>
 
+  <h3>Chat</h3>
+  <div id="chatBox"></div>
+  <input id="chatInput" placeholder="Type message">
+  <button onclick="sendMessage()">Send</button>
 </div>
 
 <script>
 const socket = io();
 let currentRoom = "";
+let isHost = false;
+
 const audio = document.getElementById("audio");
 const vinyl = document.getElementById("vinyl");
 
@@ -136,55 +136,89 @@ function joinRoom() {
   socket.emit("joinRoom", code);
 }
 
-function syncPlay() {
-  socket.emit("syncPlay", currentRoom);
+function djSync() {
+  if (isHost) {
+    socket.emit("syncPlay", currentRoom);
+  }
 }
 
 function uploadSong() {
-  const fileInput = document.getElementById("mp3Upload");
-  const file = fileInput.files[0];
-  if (!file) return alert("Select an MP3 first");
+  if (!isHost) return alert("Only host can upload song");
+
+  const file = document.getElementById("mp3Upload").files[0];
+  if (!file) return;
 
   const url = URL.createObjectURL(file);
   audio.src = url;
   audio.play();
 }
 
+function sendMessage() {
+  const msg = document.getElementById("chatInput").value;
+  socket.emit("chatMessage", { room: currentRoom, msg });
+  document.getElementById("chatInput").value = "";
+}
+
 socket.on("roomCreated", (code) => {
   currentRoom = code;
-  document.getElementById("status").innerText = "Room Code: " + code;
+  isHost = true;
+  document.getElementById("status").innerText = "Room Code: " + code + " (Host)";
 });
 
 socket.on("roomJoined", (code) => {
   currentRoom = code;
+  isHost = false;
   document.getElementById("status").innerText = "Joined Room: " + code;
 });
 
 socket.on("updateUsers", (count) => {
-  document.getElementById("users").innerText =
-    "Connected Party Members: " + count;
+  document.getElementById("users").innerText = "Members: " + count;
 });
 
-socket.on("playNow", () => {
-  audio.play();
+socket.on("syncState", ({ time, isPlaying }) => {
+  audio.currentTime = time;
+  if (isPlaying) audio.play();
+  else audio.pause();
 });
+
+socket.on("chatMessage", (msg) => {
+  const div = document.createElement("div");
+  div.innerText = msg;
+  document.getElementById("chatBox").appendChild(div);
+});
+
+socket.on("roomClosed", () => {
+  alert("Host left. Room closed.");
+  location.reload();
+});
+
+// Host sends sync every 1 second
+setInterval(() => {
+  if (isHost && currentRoom) {
+    socket.emit("updateState", {
+      code: currentRoom,
+      time: audio.currentTime,
+      isPlaying: !audio.paused
+    });
+  }
+}, 1000);
 
 audio.onplay = () => vinyl.classList.add("spin");
 audio.onpause = () => vinyl.classList.remove("spin");
 
-/* Star Background */
+// Star background
 const canvas = document.getElementById("stars");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 let stars = [];
-for (let i = 0; i < 150; i++) {
+for (let i = 0; i < 100; i++) {
   stars.push({
     x: Math.random() * canvas.width,
     y: Math.random() * canvas.height,
     radius: Math.random() * 2,
-    speed: Math.random() * 1
+    speed: Math.random()
   });
 }
 
