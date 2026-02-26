@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sanand's Sync Party</title>
+<style>
+body {
+    margin: 0;
+    background: black;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    color: #00ffff;
+}
+
+canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+.container {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    margin-top: 5%;
+}
+
+h1 {
+    font-size: 45px;
+    text-shadow: 0 0 10px #ff00cc, 0 0 25px #00ffff;
+    animation: glow 1.5s infinite alternate;
+}
+
+@keyframes glow {
+    from { text-shadow: 0 0 10px #ff00cc; }
+    to { text-shadow: 0 0 35px #00ffff; }
+}
+
+button {
+    background: black;
+    border: 2px solid #00ffff;
+    color: #00ffff;
+    padding: 12px 25px;
+    margin: 10px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    background: #00ffff;
+    color: black;
+    box-shadow: 0 0 20px #00ffff;
+}
+
+input {
+    padding: 10px;
+    margin: 10px;
+    border: 2px solid #ff00cc;
+    background: black;
+    color: #ff00cc;
+}
+
+.vinyl {
+    margin: 20px auto;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #222 40%, black 60%);
+    border: 4px solid #ff00cc;
+}
+
+.spin {
+    animation: spin 3s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.equalizer {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.bar {
+    width: 8px;
+    background: #00ffff;
+    margin: 3px;
+}
+
+#users {
+    margin-top: 10px;
+    font-size: 18px;
+    color: #ff00cc;
+}
+
+audio {
+    margin-top: 15px;
+    filter: invert(1);
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="stars"></canvas>
+
+<div class="container">
+<h1>⚡ SANAND'S SYNC PARTY ⚡</h1>
+
+<button onclick="createRoom()">Create Room</button><br>
+
+<input id="roomCode" placeholder="Enter Room Code"><br>
+<button onclick="joinRoom()">Join Room</button>
+
+<h3 id="status"></h3>
+<div id="users"></div>
+
+<button onclick="syncPlay()">DJ Sync Play</button>
+
+<div id="vinyl" class="vinyl"></div>
+
+<div class="equalizer" id="equalizer"></div>
+
+<audio id="audio" src="music.mp3" controls></audio>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let currentRoom = "";
+const audio = document.getElementById("audio");
+const vinyl = document.getElementById("vinyl");
+
+function createRoom() { socket.emit("createRoom"); }
+function joinRoom() {
+    const code = document.getElementById("roomCode").value;
+    socket.emit("joinRoom", code);
+}
+function syncPlay() { socket.emit("syncPlay", currentRoom); }
+
+socket.on("roomCreated", (code) => {
+    currentRoom = code;
+    document.getElementById("status").innerText = "Room Code: " + code;
+});
+
+socket.on("joinedRoom", (code) => {
+    currentRoom = code;
+    document.getElementById("status").innerText = "Joined Room: " + code;
+});
+
+socket.on("updateUsers", (count) => {
+    document.getElementById("users").innerText = "Connected Party Members: " + count;
+});
+
+socket.on("playNow", () => {
+    audio.play();
+});
+
+/* Vinyl control */
+audio.onplay = () => vinyl.classList.add("spin");
+audio.onpause = () => vinyl.classList.remove("spin");
+
+/* Audio Reactive Equalizer */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const analyser = audioCtx.createAnalyser();
+const source = audioCtx.createMediaElementSource(audio);
+source.connect(analyser);
+analyser.connect(audioCtx.destination);
+
+analyser.fftSize = 64;
+const bufferLength = analyser.frequencyBinCount;
+const dataArray = new Uint8Array(bufferLength);
+
+const eqContainer = document.getElementById("equalizer");
+
+for (let i = 0; i < bufferLength; i++) {
+    const bar = document.createElement("div");
+    bar.classList.add("bar");
+    eqContainer.appendChild(bar);
+}
+
+const bars = document.getElementsByClassName("bar");
+
+function animateEQ() {
+    analyser.getByteFrequencyData(dataArray);
+    for (let i = 0; i < bars.length; i++) {
+        bars[i].style.height = dataArray[i] + "px";
+    }
+    requestAnimationFrame(animateEQ);
+}
+
+audio.onplay = () => {
+    vinyl.classList.add("spin");
+    audioCtx.resume();
+    animateEQ();
+};
+
+/* Star background */
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let stars = [];
+for (let i = 0; i < 150; i++) {
+    stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 2,
+        speed: Math.random() * 1
+    });
+}
+
+function drawStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#00ffff";
+    stars.forEach(star => {
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fill();
+        star.y += star.speed;
+        if (star.y > canvas.height) star.y = 0;
+    });
+    requestAnimationFrame(drawStars);
+}
+drawStars();
+</script>
+
+</body>
+</html>
