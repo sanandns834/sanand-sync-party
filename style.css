@@ -1,0 +1,38 @@
+body {
+  background: black;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+/* Curvy Buttons */
+button {
+  background: transparent;
+  border: 2px solid #00ffff;
+  color: #00ffff;
+  padding: 12px 30px;
+  font-size: 16px;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: 0.3s ease;
+  box-shadow: 0 0 10px #00ffff;
+  margin: 10px;
+}
+
+button:hover {
+  background: #00ffff;
+  color: black;
+  box-shadow: 0 0 20px #00ffff;
+}
+
+/* Curvy Input */
+input {
+  background: transparent;
+  border: 2px solid #ff00ff;
+  padding: 12px 20px;
+  border-radius: 30px;
+  color: white;
+  outline: none;
+  box-shadow: 0 0 10px #ff00ff;
+  margin: 10px;
+}
