@@ -58,6 +58,16 @@
       margin: 5px;
     }
 
+    .fade-out {
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: 0.5s ease;
+    }
+
+    .hidden {
+      display: none;
+    }
+
     .vinyl {
       margin: 20px auto;
       width: 150px;
@@ -86,6 +96,10 @@
       text-align: left;
       font-size: 14px;
     }
+
+    .control-section {
+      margin-top: 20px;
+    }
   </style>
 </head>
 
@@ -96,27 +110,39 @@
 <div class="container">
   <h1>⚡ SANAND'S SYNC PARTY ⚡</h1>
 
-  <button onclick="createRoom()">Create Room</button><br>
+  <!-- ENTRY SECTION -->
+  <div id="entrySection">
+    <button onclick="createRoom()">Create Room</button><br>
 
-  <input id="roomCode" placeholder="Enter Room Code">
-  <button onclick="joinRoom()">Join Room</button>
+    <input id="roomCode" placeholder="Enter Room Code">
+    <button onclick="joinRoom()">Join Room</button>
+  </div>
 
   <h3 id="status"></h3>
   <div id="users"></div>
 
-  <button onclick="djSync()">DJ Sync Play</button>
+  <!-- MUSIC CONTROLS -->
+  <div class="control-section hidden" id="musicControls">
 
-  <div class="vinyl" id="vinyl"></div>
+    <button onclick="playSong()">Play</button>
+    <button onclick="pauseSong()">Pause</button>
+    <button onclick="djSync()">DJ Sync</button>
 
-  <input type="file" id="mp3Upload" accept="audio/mp3">
-  <button onclick="uploadSong()">Upload & Play</button>
+    <div class="vinyl" id="vinyl"></div>
 
-  <audio id="audio"></audio>
+    <div id="uploadSection">
+      <input type="file" id="mp3Upload" accept="audio/mp3">
+      <button onclick="uploadSong()">Upload & Play</button>
+    </div>
 
-  <h3>Chat</h3>
-  <div id="chatBox"></div>
-  <input id="chatInput" placeholder="Type message">
-  <button onclick="sendMessage()">Send</button>
+    <audio id="audio"></audio>
+
+    <h3>Chat</h3>
+    <div id="chatBox"></div>
+    <input id="chatInput" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+
+  </div>
 </div>
 
 <script>
@@ -127,6 +153,16 @@ let isHost = false;
 const audio = document.getElementById("audio");
 const vinyl = document.getElementById("vinyl");
 
+function hideEntry() {
+  const entry = document.getElementById("entrySection");
+  entry.classList.add("fade-out");
+
+  setTimeout(() => {
+    entry.classList.add("hidden");
+    document.getElementById("musicControls").classList.remove("hidden");
+  }, 500);
+}
+
 function createRoom() {
   socket.emit("createRoom");
 }
@@ -134,6 +170,16 @@ function createRoom() {
 function joinRoom() {
   const code = document.getElementById("roomCode").value;
   socket.emit("joinRoom", code);
+}
+
+function playSong() {
+  if (!isHost) return;
+  audio.play();
+}
+
+function pauseSong() {
+  if (!isHost) return;
+  audio.pause();
 }
 
 function djSync() {
@@ -163,12 +209,16 @@ socket.on("roomCreated", (code) => {
   currentRoom = code;
   isHost = true;
   document.getElementById("status").innerText = "Room Code: " + code + " (Host)";
+  document.getElementById("uploadSection").style.display = "block";
+  hideEntry();
 });
 
 socket.on("roomJoined", (code) => {
   currentRoom = code;
   isHost = false;
   document.getElementById("status").innerText = "Joined Room: " + code;
+  document.getElementById("uploadSection").style.display = "none";
+  hideEntry();
 });
 
 socket.on("updateUsers", (count) => {
@@ -192,7 +242,7 @@ socket.on("roomClosed", () => {
   location.reload();
 });
 
-// Host sends sync every 1 second
+// Host auto sync every second
 setInterval(() => {
   if (isHost && currentRoom) {
     socket.emit("updateState", {
@@ -206,7 +256,7 @@ setInterval(() => {
 audio.onplay = () => vinyl.classList.add("spin");
 audio.onpause = () => vinyl.classList.remove("spin");
 
-// Star background
+// Star Background
 const canvas = document.getElementById("stars");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
